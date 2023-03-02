@@ -17,6 +17,8 @@ learning_rate = 0.01
 logs_file = '' # ??
 checkpath = '' # ??
 source_annotation_path = 'data/annotations/labeled_source_images_webcam.txt'
+labled_target_annotation_path = 'data/annotations/labeled_target_images_amazon_1.txt'
+unlabled_target_annotation_path = 'data/annotations/unlabeled_target_images_amazon_1.txt'
 data_dir = 'data/office'
 
 class_list = get_classlist(source_annotation_path)
@@ -25,7 +27,7 @@ num_class = len(class_list)
 G = resnet34(pretrained=True)
 F = Predictor(num_class=num_class, input_vector_size=resnet_output_vector_size, norm_factor=temperature)
 nn.init.xavier_normal_(F.fc.weight)
-nn.init.zeros_(F.fc.bias)
+# nn.init.zeros_(F.fc.bias)
 
 G = nn.DataParallel(G)
 F = nn.DataParallel(F)
@@ -40,5 +42,13 @@ opt['class_list'] = class_list
 # load required data
 
 source_data_loader = DataLoader(OfficeDataset(source_annotation_path, data_dir))
+labled_target_data_loader = DataLoader(OfficeDataset(labled_target_annotation_path, data_dir))
+unlabled_target_data_loader = DataLoader(OfficeDataset(unlabled_target_annotation_path, data_dir))
+
+def train() :
+    G.train()
+    F.train()
+
+
 
 print("hi")
