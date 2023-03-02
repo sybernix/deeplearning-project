@@ -19,7 +19,7 @@ def grad_reverse(x, lambd=1.0):
 
 
 class Predictor(nn.Module):
-    def __int__(self, num_class, input_vector_size, norm_factor):
+    def __init__(self, num_class, input_vector_size, norm_factor):
         super(Predictor, self).__init__()
         self.fc = nn.Linear(input_vector_size, num_class, bias=False)
         self.num_class = num_class

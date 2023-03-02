@@ -23,9 +23,9 @@ class_list = get_classlist(source_annotation_path)
 num_class = len(class_list)
 
 G = resnet34(pretrained=True)
-F = Predictor()#num_class=num_class, input_vector_size=resnet_output_vector_size, norm_factor=temperature)
-nn.init.xavier_normal_(F.weight)
-nn.init.zeros_(F.bias)
+F = Predictor(num_class=num_class, input_vector_size=resnet_output_vector_size, norm_factor=temperature)
+nn.init.xavier_normal_(F.fc.weight)
+nn.init.zeros_(F.fc.bias)
 
 G = nn.DataParallel(G)
 F = nn.DataParallel(F)
