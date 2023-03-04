@@ -20,6 +20,7 @@ source_annotation_path = 'data/annotations/labeled_source_images_webcam.txt'
 labled_target_annotation_path = 'data/annotations/labeled_target_images_amazon_1.txt'
 unlabled_target_annotation_path = 'data/annotations/unlabeled_target_images_amazon_1.txt'
 data_dir = 'data/office'
+train_steps = 10
 
 class_list = get_classlist(source_annotation_path)
 num_class = len(class_list)
@@ -42,13 +43,19 @@ opt['class_list'] = class_list
 # load required data
 train_transform = transforms.Resize((256, 256))
 source_dataset = OfficeDataset(source_annotation_path, data_dir, transform=train_transform)
-source_data_loader = DataLoader(source_dataset, batch_size=batch_size, num_workers=0, shuffle=True, drop_last=True)
+# source_data_loader = DataLoader(source_dataset, batch_size=batch_size, num_workers=0, shuffle=True, drop_last=True)
 labled_target_dataset = OfficeDataset(labled_target_annotation_path, data_dir, transform=train_transform)
-labled_target_data_loader = DataLoader(labled_target_dataset, batch_size=batch_size, num_workers=0, shuffle=True,
-                                       drop_last=True)
+# labled_target_data_loader = DataLoader(labled_target_dataset, batch_size=batch_size, num_workers=0, shuffle=True,
+#                                        drop_last=True)
+
+labeled_datasets = torch.utils.data.ConcatDataset([source_dataset, labled_target_dataset])
+labeled_dataloader = DataLoader(labeled_datasets, batch_size=batch_size, num_workers=0, shuffle=True, drop_last=True)
+labeled_data_iter = iter(labeled_dataloader)
+
 unlabled_target_dataset = OfficeDataset(unlabled_target_annotation_path, data_dir, transform=train_transform)
 unlabled_target_data_loader = DataLoader(unlabled_target_dataset, batch_size=batch_size, num_workers=0, shuffle=True,
                                          drop_last=True)
+unlabled_data_iter = iter(unlabled_target_data_loader)
 
 
 
@@ -58,5 +65,18 @@ def train() :
     feature_extractor.train()
     predictor.train()
 
-    optimizer_feature_extractor = optim.SGD(feature_extractor.parameters(), lr=learning_rate)
+    optimizer_feature_extractor = optim.SGD(feature_extractor.parameters(), lr=learning_rate, momentum=0.9, weight_decay=0.0005,
+                                            nesterov=True)
+    optimizer_predictor = optim.SGD(predictor.parameters(), lr=learning_rate, momentum=0.9, weight_decay=0.0005,
+                                    nesterov=True)
 
+    for step in range(train_steps):
+        labeled_data_iter_next = next(labeled_data_iter)
+        labeled_data_images = labeled_data_iter_next[0]
+        labeled_data_labels = labeled_data_iter_next[1]
+        features = feature_extractor(labeled_data_images.to(device))
+        predictions = predictor(features)
+
+        print("hi")
+
+train()
