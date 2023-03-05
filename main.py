@@ -10,7 +10,7 @@ from model.basenet import Predictor
 from utils import get_classlist
 
 batch_size = 4
-resnet_output_vector_size = 512 # ??
+resnet_output_vector_size = 1000 # ??
 temperature = 0.05
 device = torch.device("mps")
 learning_rate = 0.01
@@ -70,12 +70,25 @@ def train() :
     optimizer_predictor = optim.SGD(predictor.parameters(), lr=learning_rate, momentum=0.9, weight_decay=0.0005,
                                     nesterov=True)
 
+    criterion = nn.CrossEntropyLoss().to(device)
+
     for step in range(train_steps):
         labeled_data_iter_next = next(labeled_data_iter)
-        labeled_data_images = labeled_data_iter_next[0]
-        labeled_data_labels = labeled_data_iter_next[1]
-        features = feature_extractor(labeled_data_images.to(device))
+        labeled_data_images = labeled_data_iter_next[0].type(torch.FloatTensor).to(device)
+        labeled_data_labels = labeled_data_iter_next[1].to(device)
+        features = feature_extractor(labeled_data_images)
         predictions = predictor(features)
+
+        cross_entropy_loss = criterion(predictions, labeled_data_labels)
+
+        cross_entropy_loss.backward(retain_graph=True)
+        optimizer_feature_extractor.step()
+        optimizer_predictor.step()
+        optimizer_feature_extractor.zero_grad()
+        optimizer_predictor.zero_grad()
+
+        # calculate loss for unlabeled target data
+
 
         print("hi")
 
