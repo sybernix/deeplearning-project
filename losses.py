@@ -16,8 +16,13 @@ def get_losses_unlabeled(feature_extractor, predictor, unlabeled_data_images, un
 
     # calculate adversarial adaptive clustering loss
 
-def adversarial_adaptive_clustering_loss_unlabeled():
-    print()
+def adversarial_adaptive_clustering_loss_unlabeled(args, features, target, probabilities, probabilities_transformed,
+                                                   binary_cross_entropy, device):
+    target_unlabeled = pairwise_target(args, features, target, device)
+    probability_bottleneck_row, _ = pairwise_enumerate_2d(probabilities)
+    _, probability_bottleneck_column = pairwise_enumerate_2d(probabilities_transformed)
+    adversarial_binary_cross_entropy_loss = -binary_cross_entropy(probability_bottleneck_row,
+                                                                  probability_bottleneck_column, target_unlabeled)
 
 def pairwise_target(args, features, target, device):
     """ Generates similarity label pairwise """
