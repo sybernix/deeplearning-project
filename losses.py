@@ -2,19 +2,41 @@ import torch
 import torch.nn.functional as F
 
 
-def get_losses_unlabeled(feature_extractor, predictor, unlabeled_data_images, unlabeled_data_images_transformed1,
-                         unlabeled_data_images_transformed2):
+def get_losses_unlabeled(args, feature_extractor, predictor, unlabeled_data_images, unlabeled_data_images_transformed1,
+                         unlabeled_data_images_transformed2, target, binary_cross_entropy, w_consistency, device):
     features = feature_extractor(unlabeled_data_images)
     features_transformed1 = feature_extractor(unlabeled_data_images_transformed1)
     features_transformed2 = feature_extractor(unlabeled_data_images_transformed2)
 
-    predictions = predictor(features)
-    predictions_transformed1 = predictor(features_transformed1)
+    predictions = predictor(features, reversed=True, eta=1.0)
+    predictions_transformed1 = predictor(features_transformed1, reversed=True, eta=1.0)
 
     probabilities = F.softmax(predictions, dim=1)
     probabilities_transformed1 = F.softmax(predictions_transformed1, dim=1)
 
     # calculate adversarial adaptive clustering loss
+    adversarial_adaptive_clustering_loss = adversarial_adaptive_clustering_loss_unlabeled(args, features, target,
+                                                                                          probabilities,
+                                                                                          probabilities_transformed1,
+                                                                                          binary_cross_entropy, device)
+    predictions = predictor(features)
+    predictions_transformed1 = predictor(features_transformed1)
+    predictions_transformed2 = predictor(features_transformed2)
+
+    probabilities = F.softmax(predictions, dim=1)
+    probabilities_transformed1 = F.softmax(predictions_transformed1, dim=1)
+    probabilities_transformed2 = F.softmax(predictions_transformed2, dim=1)
+
+    max_probabilities, pseudo_labels = torch.max(probabilities.detach_(), dim=1)
+    mask = max_probabilities.get(args.threshold).float()
+
+    pseudo_labels_loss = (F.cross_entropy(predictions_transformed2, pseudo_labels, reduction='none') * mask).mean()
+
+    consistency_loss = w_consistency * F.mse_loss(probabilities_transformed1, probabilities_transformed2)
+
+    return adversarial_adaptive_clustering_loss, pseudo_labels_loss, consistency_loss
+
+
 
 def adversarial_adaptive_clustering_loss_unlabeled(args, features, target, probabilities, probabilities_transformed,
                                                    binary_cross_entropy, device):
@@ -23,6 +45,8 @@ def adversarial_adaptive_clustering_loss_unlabeled(args, features, target, proba
     _, probability_bottleneck_column = pairwise_enumerate_2d(probabilities_transformed)
     adversarial_binary_cross_entropy_loss = -binary_cross_entropy(probability_bottleneck_row,
                                                                   probability_bottleneck_column, target_unlabeled)
+    return adversarial_binary_cross_entropy_loss
+
 
 def pairwise_target(args, features, target, device):
     """ Generates similarity label pairwise """
@@ -47,11 +71,13 @@ def pairwise_target(args, features, target, device):
         raise ValueError('Verify the target labels')
     return target_unlabeled
 
+
 def pairwise_enumerate_1D(x):
     assert x.ndimension() == 1, 'Dimension of the input must be 1'
     x1 = x.repeat(x.size(0), )
     x2 = x.repeat(x.size(0)).view(-1, x.size(0)).transpose(1, 0).reshape(-1)
     return x1, x2
+
 
 def pairwise_enumerate_2d(x):
     assert x.ndimension() == 2, 'Dimension of the input must be 2'
