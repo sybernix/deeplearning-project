@@ -5,8 +5,6 @@ import torch.nn as nn
 import torch.optim as optim
 from torchvision.models import resnet34
 from torch.utils.data import DataLoader
-from torchvision.transforms import transforms
-from OfficeDataset import OfficeDataset
 from model.basenet import Predictor
 from utils import get_classlist
 
@@ -18,10 +16,7 @@ parser.add_argument('--learning_rate', type=float, default=0.01)
 parser.add_argument('--train_steps', type=int, default=10)
 logs_file = '' # ??
 checkpath = '' # ??
-source_annotation_path = 'data/annotations/labeled_source_images_webcam.txt'
-labled_target_annotation_path = 'data/annotations/labeled_target_images_amazon_1.txt'
-unlabled_target_annotation_path = 'data/annotations/unlabeled_target_images_amazon_1.txt'
-data_dir = 'data/office'
+
 
 args = parser.parse_args()
 
@@ -46,22 +41,14 @@ opt['logs_file'] = logs_file
 opt['checkpath'] = checkpath
 opt['class_list'] = class_list
 
-# load required data
-train_transform = transforms.Resize((256, 256))
-source_dataset = OfficeDataset(source_annotation_path, data_dir, transform=train_transform)
-# source_data_loader = DataLoader(source_dataset, batch_size=batch_size, num_workers=0, shuffle=True, drop_last=True)
-labled_target_dataset = OfficeDataset(labled_target_annotation_path, data_dir, transform=train_transform)
-# labled_target_data_loader = DataLoader(labled_target_dataset, batch_size=batch_size, num_workers=0, shuffle=True,
-#                                        drop_last=True)
 
-labeled_datasets = torch.utils.data.ConcatDataset([source_dataset, labled_target_dataset])
+
 labeled_dataloader = DataLoader(labeled_datasets, batch_size=args.batch_size, num_workers=0, shuffle=True,
                                 drop_last=True)
-labeled_data_iter = iter(labeled_dataloader)
-
-unlabled_target_dataset = OfficeDataset(unlabled_target_annotation_path, data_dir, transform=train_transform)
 unlabled_target_data_loader = DataLoader(unlabled_target_dataset, batch_size=args.batch_size, num_workers=0,
                                          shuffle=True, drop_last=True)
+
+labeled_data_iter = iter(labeled_dataloader)
 unlabled_data_iter = iter(unlabled_target_data_loader)
 
 print("hi")
