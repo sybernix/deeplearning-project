@@ -1,5 +1,7 @@
 import torch
 import torch.nn.functional as F
+import torch.nn as nn
+import numpy as np
 
 
 def get_losses_unlabeled(args, feature_extractor, predictor, unlabeled_data_images, unlabeled_data_images_transformed1,
@@ -84,3 +86,20 @@ def pairwise_enumerate_2d(x):
     x1 = x.repeat(x.size(0), 1)
     x2 = x.repeat(1, x.size(0)).view(-1, x.size(1))
     return x1, x2
+
+
+class BCE_soft_labels(nn.Module):
+    eps = 1e-1
+    def forward(self, probability1, probability2, similarity):
+        P = probability1.mul_(probability2)
+        P = P.sum(1)
+        negativeLogP = -(similarity * torch.log(P + self.eps) + (1. - similarity) * torch.log(1. - P + self.eps))
+        return negativeLogP.mean()
+
+def sigmoid_rampup(current, rampup_length):
+    if rampup_length == 0:
+        return 1.0
+    else:
+        current = np.clip(current, 0, rampup_length)
+        phase = 1.0 - current / rampup_length
+        return float(np.exp(-5.0 * phase * phase))

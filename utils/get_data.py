@@ -4,13 +4,14 @@ import torch
 import numpy as np
 from torchvision.transforms import transforms
 from OfficeDataset import OfficeDataset
+from utils.randaugment import RandAugmentMC
 
 
 def get_data(args):
-    source_annotation_path = 'data/annotations/labeled_source_images_webcam.txt'
-    labled_target_annotation_path = 'data/annotations/labeled_target_images_amazon_1.txt'
-    unlabled_target_annotation_path = 'data/annotations/unlabeled_target_images_amazon_1.txt'
-    data_dir = 'data/office'
+    source_annotation_path = './data/annotations/labeled_source_images_webcam.txt'
+    labled_target_annotation_path = './data/annotations/labeled_target_images_amazon_1.txt'
+    unlabled_target_annotation_path = './data/annotations/unlabeled_target_images_amazon_1.txt'
+    data_dir = './data/office'
 
     # define transformations
     data_transforms = {
@@ -32,7 +33,7 @@ def get_data(args):
             transforms.Resize(256),
             transforms.RandomHorizontalFlip(),
             transforms.RandomCrop(224),
-            RandomAugmentation(numAugs=2, m=10),
+            RandAugmentMC(n=2, m=10),
             transforms.ToTensor(),
             transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
         ]),
@@ -54,22 +55,27 @@ def get_data(args):
 
     labeled_dataset = torch.utils.data.ConcatDataset([source_dataset, labled_target_dataset])
 
-    unlabled_target_dataset = OfficeDataset(unlabled_target_annotation_path, data_dir, transform=data_transforms.get('train'))
+    unlabled_target_dataset = OfficeDataset(unlabled_target_annotation_path, data_dir,
+                                            transform=data_transforms.get('train'),
+                                            strong_transform=data_transforms.get('strong'))
     return labeled_dataset, unlabled_target_dataset
 
-class RandomAugmentation(object):
-    def __init__(self, numAugs, m):
-        assert numAugs >= 1
-        assert 1 <= m <= 10
-        self.numAugs = numAugs
-        self.m = m
-        self.augmentation_pool = augmentation_pool
-
-    def __call__(self, img):
-        operations = random.choices(self.augmentation_pool, k=self.numAugs)
-        for operation, max_v, bias in operations:
-            v = np.random.randint(1, self.m)
-            if random.random() < 0.5:
-                img = operation(img, v=v, max_v=v, bias=bias)
-        img = CutoutRegion(img, 16)
-        return img
+# class RandomAugmentation(object):
+#     def __init__(self, numAugs, m):
+#         assert numAugs >= 1
+#         assert 1 <= m <= 10
+#         self.numAugs = numAugs
+#         self.m = m
+#         self.augmentation_pool = augmentation_pool()
+#
+#     def __call__(self, img):
+#         operations = random.choices(self.augmentation_pool, k=self.numAugs)
+#         for operation, max_v, bias in operations:
+#             v = np.random.randint(1, self.m)
+#             if random.random() < 0.5:
+#                 img = operation(img, v=v, max_v=v, bias=bias)
+#         img = CutoutRegion(img, 16)
+#         return img
+#
+# def augmentation_pool():
+#     augmentations = [()]

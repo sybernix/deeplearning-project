@@ -1,12 +1,14 @@
-import numpy as np
 import argparse
 import torch
 import torch.nn as nn
 import torch.optim as optim
 from torchvision.models import resnet34
 from torch.utils.data import DataLoader
+
+from losses import get_losses_unlabeled, BCE_soft_labels, sigmoid_rampup
+from utils.get_data import get_data
 from model.basenet import Predictor
-from utils import get_classlist
+from utils.utils import get_classlist
 
 # arguments
 parser = argparse.ArgumentParser()
@@ -14,15 +16,18 @@ parser.add_argument('--batch_size', type=int, default=4)
 parser.add_argument('--temperature', type=float, default=0.05)
 parser.add_argument('--learning_rate', type=float, default=0.01)
 parser.add_argument('--train_steps', type=int, default=10)
+parser.add_argument('--rampup_coeff', type=float, default=30.0)
+parser.add_argument('--rampup_length', type=int, default=20000)
 logs_file = '' # ??
 checkpath = '' # ??
 
 
 args = parser.parse_args()
 
-device = torch.device("mps")
+device = torch.device("cpu")
 resnet_output_vector_size = 1000 # ??
 
+source_annotation_path = 'data/annotations/labeled_source_images_webcam.txt'
 class_list = get_classlist(source_annotation_path)
 num_class = len(class_list)
 
@@ -41,7 +46,7 @@ opt['logs_file'] = logs_file
 opt['checkpath'] = checkpath
 opt['class_list'] = class_list
 
-
+labeled_datasets, unlabled_target_dataset = get_data(args)
 
 labeled_dataloader = DataLoader(labeled_datasets, batch_size=args.batch_size, num_workers=0, shuffle=True,
                                 drop_last=True)
@@ -63,6 +68,7 @@ def train() :
     optimizer_predictor = optim.SGD(predictor.parameters(), lr=args.learning_rate, momentum=0.9, weight_decay=0.0005,
                                     nesterov=True)
 
+    BCE = BCE_soft_labels().to(device)
     criterion = nn.CrossEntropyLoss().to(device)
 
     for step in range(args.train_steps):
@@ -81,6 +87,18 @@ def train() :
         optimizer_predictor.zero_grad()
 
         # calculate loss for unlabeled target data
+        unlabeled_data_iter_next = next(unlabled_data_iter)
+        unlabeled_data_images = unlabeled_data_iter_next[0].type(torch.FloatTensor).to(device)
+        unlabeled_data_images_t = unlabeled_data_iter_next[2].type(torch.FloatTensor).to(device)
+        unlabeled_data_images_t2 = unlabeled_data_iter_next[3].type(torch.FloatTensor).to(device)
+        unlabeled_data_labels = unlabeled_data_iter_next[1].to(device)
+
+        rampup = sigmoid_rampup(step, args.rampup_length)
+        w_consistency = args.rampup_coeff * rampup
+
+        adversarial_adaptive_clustering_loss, pseudo_labels_loss, consistency_loss = get_losses_unlabeled(args,
+                                            feature_extractor, predictor, unlabeled_data_images, unlabeled_data_images_t,
+                                            unlabeled_data_images_t2, unlabeled_data_labels, BCE, w_consistency, device)
 
         print("hi")
 
