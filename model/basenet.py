@@ -4,21 +4,18 @@ from torch.autograd import Function
 
 
 class GradReverse(Function):
-    def __int__(self, lambd):
-        self.lambd = lambd
-
     @staticmethod
     def forward(self, x):
         return x.view_as(x)
 
     @staticmethod
     def backward(self, output_grad):
-        input_grad = output_grad * (-self.lambd)
+        input_grad = -output_grad
         return input_grad
 
 
 def grad_reverse(x, lambd=1.0):
-    return GradReverse(lambd).apply(x)
+    return GradReverse().apply(x) * lambd
 
 
 class Predictor(nn.Module):

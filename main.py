@@ -15,7 +15,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--batch_size', type=int, default=4)
 parser.add_argument('--temperature', type=float, default=0.05)
 parser.add_argument('--learning_rate', type=float, default=0.01)
-parser.add_argument('--train_steps', type=int, default=10)
+parser.add_argument('--train_steps', type=int, default=100)
 parser.add_argument('--rampup_coeff', type=float, default=30.0)
 parser.add_argument('--rampup_length', type=int, default=20000)
 parser.add_argument('--threshold', default=0.95, type=float)
@@ -25,7 +25,7 @@ checkpath = '' # ??
 
 args = parser.parse_args()
 
-device = torch.device("cpu")
+device = torch.device("mps")
 resnet_output_vector_size = 1000 # ??
 
 source_annotation_path = 'data/annotations/labeled_source_images_webcam.txt'
@@ -101,7 +101,15 @@ def train():
                                             feature_extractor, predictor, unlabeled_data_images, unlabeled_data_images_t,
                                             unlabeled_data_images_t2, unlabeled_data_labels, BCE, w_consistency, device)
 
-        print("hi")
+        loss = adversarial_adaptive_clustering_loss + pseudo_labels_loss + consistency_loss
+        loss.backward()
+        optimizer_feature_extractor.step()
+        optimizer_predictor.step()
+        optimizer_feature_extractor.zero_grad()
+        optimizer_predictor.zero_grad()
+
+        if step % 10 == 0:
+            print("step: " + str(step) + ". ce loss: " + str(cross_entropy_loss) + ". unlabeled loss: " + str(loss))
 
 
 train()
