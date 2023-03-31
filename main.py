@@ -59,7 +59,7 @@ unlabled_data_iter = iter(unlabled_target_data_loader)
 print("hi")
 
 
-def train() :
+def train():
     feature_extractor.train()
     predictor.train()
 
@@ -73,7 +73,7 @@ def train() :
 
     for step in range(args.train_steps):
         labeled_data_iter_next = next(labeled_data_iter)
-        labeled_data_images = labeled_data_iter_next[0].type(torch.FloatTensor).to(device)
+        labeled_data_images = labeled_data_iter_next[0].to(device)
         labeled_data_labels = labeled_data_iter_next[1].to(device)
         features = feature_extractor(labeled_data_images)
         predictions = predictor(features)

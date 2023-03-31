@@ -22,13 +22,12 @@ class OfficeDataset(Dataset):
             image = Image.open(f)
             image = image.convert('RGB')
             label = self.img_labels.iloc[idx, 1]
-            image_transformed = None
-            image_transformed2 = None
-            if self.transform:
-                image = self.transform(image)
-            if self.target_transform:
+            if self.transform is not None:
+                out_image = self.transform(image)
+            if self.target_transform is not None:
                 label = self.target_transform(label)
-            if self.strong_transform:
+            if self.strong_transform is not None:
                 image_transformed = self.strong_transform(image)
                 image_transformed2 = self.strong_transform(image)
-            return image, label, image_transformed, image_transformed2
+                return out_image, label, image_transformed, image_transformed2
+            return out_image, label
