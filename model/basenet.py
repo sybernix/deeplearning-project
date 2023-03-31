@@ -7,15 +7,18 @@ class GradReverse(Function):
     def __int__(self, lambd):
         self.lambd = lambd
 
-    def forward(self, x, **kwargs):
+    @staticmethod
+    def forward(self, x):
         return x.view_as(x)
 
+    @staticmethod
     def backward(self, output_grad):
         input_grad = output_grad * (-self.lambd)
+        return input_grad
 
 
 def grad_reverse(x, lambd=1.0):
-    return GradReverse(lambd)(x)
+    return GradReverse(lambd).apply(x)
 
 
 class Predictor(nn.Module):
@@ -25,8 +28,8 @@ class Predictor(nn.Module):
         self.num_class = num_class
         self.norm_factor = norm_factor
 
-    def forward(self, x, reverse=False, lambd=0.1):
-        if reverse:
+    def forward(self, x, reversed=False, lambd=0.1):
+        if reversed:
             x = grad_reverse(x, lambd)
         x = F.normalize(x)
         x = self.fc(x)

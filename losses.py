@@ -10,8 +10,8 @@ def get_losses_unlabeled(args, feature_extractor, predictor, unlabeled_data_imag
     features_transformed1 = feature_extractor(unlabeled_data_images_transformed1)
     features_transformed2 = feature_extractor(unlabeled_data_images_transformed2)
 
-    predictions = predictor(features, reversed=True, eta=1.0)
-    predictions_transformed1 = predictor(features_transformed1, reversed=True, eta=1.0)
+    predictions = predictor(features, reversed=True, lambd=1.0)
+    predictions_transformed1 = predictor(features_transformed1, reversed=True, lambd=1.0)
 
     probabilities = F.softmax(predictions, dim=1)
     probabilities_transformed1 = F.softmax(predictions_transformed1, dim=1)
@@ -30,7 +30,7 @@ def get_losses_unlabeled(args, feature_extractor, predictor, unlabeled_data_imag
     probabilities_transformed2 = F.softmax(predictions_transformed2, dim=1)
 
     max_probabilities, pseudo_labels = torch.max(probabilities.detach_(), dim=1)
-    mask = max_probabilities.get(args.threshold).float()
+    mask = max_probabilities.ge(args.threshold).float()
 
     pseudo_labels_loss = (F.cross_entropy(predictions_transformed2, pseudo_labels, reduction='none') * mask).mean()
 

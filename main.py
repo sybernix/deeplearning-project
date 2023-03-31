@@ -18,6 +18,7 @@ parser.add_argument('--learning_rate', type=float, default=0.01)
 parser.add_argument('--train_steps', type=int, default=10)
 parser.add_argument('--rampup_coeff', type=float, default=30.0)
 parser.add_argument('--rampup_length', type=int, default=20000)
+parser.add_argument('--threshold', default=0.95, type=float)
 logs_file = '' # ??
 checkpath = '' # ??
 
