@@ -4,6 +4,7 @@ import torch.nn as nn
 import torch.optim as optim
 from torchvision.models import resnet34
 from torch.utils.data import DataLoader
+from torch.utils.tensorboard import SummaryWriter
 
 from losses import get_losses_unlabeled, BCE_soft_labels, sigmoid_rampup
 from utils.get_data import get_data
@@ -15,7 +16,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--batch_size', type=int, default=4)
 parser.add_argument('--temperature', type=float, default=0.05)
 parser.add_argument('--learning_rate', type=float, default=0.01)
-parser.add_argument('--train_steps', type=int, default=100)
+parser.add_argument('--train_steps', type=int, default=1000)
 parser.add_argument('--rampup_coeff', type=float, default=30.0)
 parser.add_argument('--rampup_length', type=int, default=20000)
 parser.add_argument('--threshold', default=0.95, type=float)
@@ -25,7 +26,7 @@ checkpath = '' # ??
 
 args = parser.parse_args()
 
-device = torch.device("mps")
+device = torch.device("cpu")
 resnet_output_vector_size = 1000 # ??
 
 source_annotation_path = 'data/annotations/labeled_source_images_webcam.txt'
@@ -54,13 +55,17 @@ labeled_dataloader = DataLoader(labeled_datasets, batch_size=args.batch_size, nu
 unlabled_target_data_loader = DataLoader(unlabled_target_dataset, batch_size=args.batch_size, num_workers=0,
                                          shuffle=True, drop_last=True)
 
-labeled_data_iter = iter(labeled_dataloader)
-unlabled_data_iter = iter(unlabled_target_data_loader)
+labeled_len = len(labeled_dataloader)
+unlabeled_len = len(unlabled_target_data_loader)
 
 print("hi")
+writer = SummaryWriter()
 
 
 def train():
+    labeled_data_iter = iter(labeled_dataloader)
+    unlabled_data_iter = iter(unlabled_target_data_loader)
+
     feature_extractor.train()
     predictor.train()
 
@@ -73,6 +78,12 @@ def train():
     criterion = nn.CrossEntropyLoss().to(device)
 
     for step in range(args.train_steps):
+
+        if step % labeled_len:
+            labeled_data_iter = iter(labeled_dataloader)
+        if step % unlabeled_len:
+            unlabled_data_iter = iter(unlabled_target_data_loader)
+
         labeled_data_iter_next = next(labeled_data_iter)
         labeled_data_images = labeled_data_iter_next[0].to(device)
         labeled_data_labels = labeled_data_iter_next[1].to(device)
@@ -80,6 +91,7 @@ def train():
         predictions = predictor(features)
 
         cross_entropy_loss = criterion(predictions, labeled_data_labels)
+        writer.add_scalar("Loss/train/cross entropy", cross_entropy_loss, step)
 
         cross_entropy_loss.backward(retain_graph=True)
         optimizer_feature_extractor.step()
@@ -102,6 +114,7 @@ def train():
                                             unlabeled_data_images_t2, unlabeled_data_labels, BCE, w_consistency, device)
 
         loss = adversarial_adaptive_clustering_loss + pseudo_labels_loss + consistency_loss
+        writer.add_scalar("Loss/train/unlabeled", loss, step)
         loss.backward()
         optimizer_feature_extractor.step()
         optimizer_predictor.step()
@@ -113,3 +126,4 @@ def train():
 
 
 train()
+writer.flush()
