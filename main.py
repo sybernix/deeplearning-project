@@ -16,17 +16,18 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--batch_size', type=int, default=4)
 parser.add_argument('--temperature', type=float, default=0.05)
 parser.add_argument('--learning_rate', type=float, default=0.01)
-parser.add_argument('--train_steps', type=int, default=1000)
+parser.add_argument('--train_steps', type=int, default=50000)
 parser.add_argument('--rampup_coeff', type=float, default=30.0)
 parser.add_argument('--rampup_length', type=int, default=20000)
 parser.add_argument('--threshold', default=0.95, type=float)
+parser.add_argument('--lr_multiplier', default=0.1, type=float)
 logs_file = '' # ??
 checkpath = '' # ??
 
 
 args = parser.parse_args()
 
-device = torch.device("cpu")
+device = torch.device("mps")
 resnet_output_vector_size = 1000 # ??
 
 source_annotation_path = 'data/annotations/labeled_source_images_webcam.txt'
@@ -38,8 +39,16 @@ predictor = Predictor(num_class=num_class, input_vector_size=resnet_output_vecto
 nn.init.xavier_normal_(predictor.fc.weight)
 # nn.init.zeros_(F.fc.bias)
 
-feature_extractor = nn.DataParallel(feature_extractor)
-predictor = nn.DataParallel(predictor)
+feature_extractor_params = []
+for key, value in dict(feature_extractor.named_parameters()).items():
+    if value.requires_grad:
+        if 'classifier' not in key:
+            feature_extractor_params += [{'params': [value], 'lr': args.lr_multiplier, 'weight_decay': 0.0005}]
+        else:
+            feature_extractor_params += [{'params': [value], 'lr': args.lr_multiplier * 10, 'weight_decay': 0.0005}]
+
+# feature_extractor = nn.DataParallel(feature_extractor)
+# predictor = nn.DataParallel(predictor)
 feature_extractor = feature_extractor.to(device)
 predictor = predictor.to(device)
 
@@ -69,9 +78,9 @@ def train():
     feature_extractor.train()
     predictor.train()
 
-    optimizer_feature_extractor = optim.SGD(feature_extractor.parameters(), lr=args.learning_rate, momentum=0.9,
+    optimizer_feature_extractor = optim.SGD(feature_extractor.parameters(), lr=0, momentum=0.9,
                                             weight_decay=0.0005, nesterov=True)
-    optimizer_predictor = optim.SGD(predictor.parameters(), lr=args.learning_rate, momentum=0.9, weight_decay=0.0005,
+    optimizer_predictor = optim.SGD(list(predictor.parameters()), lr=0.001, momentum=0.9, weight_decay=0.0005,
                                     nesterov=True)
 
     BCE = BCE_soft_labels().to(device)
