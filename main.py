@@ -1,4 +1,6 @@
 import argparse
+
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -35,7 +37,8 @@ class_list = get_classlist(source_annotation_path)
 num_class = len(class_list)
 
 feature_extractor = resnet34(pretrained=True)
-predictor = Predictor(num_class=num_class, input_vector_size=resnet_output_vector_size, norm_factor=args.temperature)
+feature_extractor.fc = nn.Identity()
+predictor = Predictor(num_class=num_class, input_vector_size=512, norm_factor=args.temperature)
 nn.init.xavier_normal_(predictor.fc.weight)
 # nn.init.zeros_(F.fc.bias)
 
@@ -57,12 +60,15 @@ opt['logs_file'] = logs_file
 opt['checkpath'] = checkpath
 opt['class_list'] = class_list
 
-labeled_datasets, unlabled_target_dataset = get_data(args)
+labeled_datasets, unlabled_target_dataset, target_dataset_val = get_data(args)
 
 labeled_dataloader = DataLoader(labeled_datasets, batch_size=args.batch_size, num_workers=0, shuffle=True,
                                 drop_last=True)
 unlabled_target_data_loader = DataLoader(unlabled_target_dataset, batch_size=args.batch_size, num_workers=0,
                                          shuffle=True, drop_last=True)
+
+target_val_dataloader = DataLoader(target_dataset_val, batch_size=min(args.batch_size, len(target_dataset_val)),
+                                   num_workers=0, shuffle=True, drop_last=True)
 
 labeled_len = len(labeled_dataloader)
 unlabeled_len = len(unlabled_target_data_loader)
@@ -130,9 +136,41 @@ def train():
         optimizer_feature_extractor.zero_grad()
         optimizer_predictor.zero_grad()
 
-        if step % 10 == 0:
-            print("step: " + str(step) + ". ce loss: " + str(cross_entropy_loss) + ". unlabeled loss: " + str(loss))
+        # if step % 10 == 0:
+        #     print("step: " + str(step) + ". ce loss: " + str(cross_entropy_loss) + ". unlabeled loss: " + str(loss))
 
+        if step % 5 == 0:
+            val_loss, val_accuracy = test(target_val_dataloader)
+
+
+def test(dataloader):
+    feature_extractor.eval()
+    predictor.eval()
+    test_loss = 0
+    num_correct = 0
+    size = 0
+    num_class = len(class_list)
+    output_all = np.zeros((0, num_class))
+    criterion = nn.CrossEntropyLoss().to(device)
+    confusion_matrix = torch.zeros(num_class, num_class)
+    with torch.no_grad():
+        for batch_idx, data_t in enumerate(dataloader):
+            im_data_t = data_t[0].to(device)
+            gt_labels_t = data_t[1].to(device)
+            features = feature_extractor(im_data_t)
+            predictions = predictor(features)
+            output_all = np.r_[output_all, predictions.data.cpu().numpy()]
+            size += im_data_t.size(0)
+            predictions1 = predictions.data.max(1)[1]
+            for t, p in zip(gt_labels_t.view(-1), predictions1.view(-1)):
+                confusion_matrix[t.long(), p.long()] += 1
+            num_correct += predictions1.eq(gt_labels_t.data).cpu().sum()
+            test_loss += criterion(predictions1, gt_labels_t) / len(dataloader)
+    print('\nTest set: Average loss: {:.4f}, Accuracy: {}/{} F1 ({:.0f}%)\n'.format(test_loss, num_correct, size,
+                                                                                    100. * num_correct / size))
+    feature_extractor.train()
+    predictor.train()
+    return test_loss.data, 100 * float(num_correct) / size
 
 train()
 writer.flush()
