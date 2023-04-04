@@ -11,7 +11,7 @@ from torch.utils.tensorboard import SummaryWriter
 from losses import get_losses_unlabeled, BCE_soft_labels, sigmoid_rampup
 from utils.get_data import get_data
 from model.basenet import Predictor
-from utils.utils import get_classlist
+from utils.utils import get_classlist, lr_scheduler
 
 # arguments
 parser = argparse.ArgumentParser()
@@ -29,6 +29,7 @@ checkpath = '' # ??
 
 args = parser.parse_args()
 
+torch.manual_seed(1)
 device = torch.device("mps")
 resnet_output_vector_size = 1000 # ??
 
@@ -40,7 +41,7 @@ feature_extractor = resnet34(pretrained=True)
 feature_extractor.fc = nn.Identity()
 predictor = Predictor(num_class=num_class, input_vector_size=512, norm_factor=args.temperature)
 nn.init.xavier_normal_(predictor.fc.weight)
-# nn.init.zeros_(F.fc.bias)
+# nn.init.zeros_(predictor.fc.bias)
 
 feature_extractor_params = []
 for key, value in dict(feature_extractor.named_parameters()).items():
@@ -50,8 +51,8 @@ for key, value in dict(feature_extractor.named_parameters()).items():
         else:
             feature_extractor_params += [{'params': [value], 'lr': args.lr_multiplier * 10, 'weight_decay': 0.0005}]
 
-# feature_extractor = nn.DataParallel(feature_extractor)
-# predictor = nn.DataParallel(predictor)
+feature_extractor = nn.DataParallel(feature_extractor)
+predictor = nn.DataParallel(predictor)
 feature_extractor = feature_extractor.to(device)
 predictor = predictor.to(device)
 
@@ -84,15 +85,24 @@ def train():
     feature_extractor.train()
     predictor.train()
 
-    optimizer_feature_extractor = optim.SGD(feature_extractor.parameters(), lr=0, momentum=0.9,
-                                            weight_decay=0.0005, nesterov=True)
-    optimizer_predictor = optim.SGD(list(predictor.parameters()), lr=0.001, momentum=0.9, weight_decay=0.0005,
+    optimizer_feature_extractor = optim.SGD(feature_extractor_params, momentum=0.9, weight_decay=0.0005, nesterov=True)
+    optimizer_predictor = optim.SGD(list(predictor.parameters()), lr=1.0, momentum=0.9, weight_decay=0.0005,
                                     nesterov=True)
+
+    params_lr_feat_extractor = []
+    for param_group in optimizer_feature_extractor.param_groups:
+        params_lr_feat_extractor.append(param_group["lr"])
+    params_lr_predictor = []
+    for param_group in optimizer_predictor.param_groups:
+        params_lr_predictor.append(param_group["lr"])
 
     BCE = BCE_soft_labels().to(device)
     criterion = nn.CrossEntropyLoss().to(device)
 
     for step in range(args.train_steps):
+
+        optimizer_feature_extractor = lr_scheduler(params_lr_feat_extractor, optimizer_feature_extractor, step, args.learning_rate)
+        optimizer_predictor = lr_scheduler(params_lr_predictor, optimizer_predictor, step, args.learning_rate)
 
         if step % labeled_len:
             labeled_data_iter = iter(labeled_dataloader)
@@ -136,10 +146,10 @@ def train():
         optimizer_feature_extractor.zero_grad()
         optimizer_predictor.zero_grad()
 
-        # if step % 10 == 0:
-        #     print("step: " + str(step) + ". ce loss: " + str(cross_entropy_loss) + ". unlabeled loss: " + str(loss))
+        if step % 10 == 0:
+            print("step: " + str(step) + ". ce loss: " + str(cross_entropy_loss) + ". unlabeled loss: " + str(loss))
 
-        if step % 5 == 0:
+        if step % 100 == 0:
             val_loss, val_accuracy = test(target_val_dataloader)
 
 
@@ -165,7 +175,7 @@ def test(dataloader):
             for t, p in zip(gt_labels_t.view(-1), predictions1.view(-1)):
                 confusion_matrix[t.long(), p.long()] += 1
             num_correct += predictions1.eq(gt_labels_t.data).cpu().sum()
-            test_loss += criterion(predictions1, gt_labels_t) / len(dataloader)
+            test_loss += criterion(predictions1.float(), gt_labels_t.float()) / len(dataloader)
     print('\nTest set: Average loss: {:.4f}, Accuracy: {}/{} F1 ({:.0f}%)\n'.format(test_loss, num_correct, size,
                                                                                     100. * num_correct / size))
     feature_extractor.train()

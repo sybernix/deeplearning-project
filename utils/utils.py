@@ -27,3 +27,13 @@ def display_images_from_dataloader(data_loader):
         plt.yticks([])
     fig
     plt.show()
+
+
+def lr_scheduler(param_lr, optimizer, iter, gamma=0.0001, power=0.75, init_lr=0.001):
+    coeff = init_lr * (1 + gamma * iter) ** (-power)
+    i = 0
+    for param_group in optimizer.param_groups:
+        param_group["lr"] = coeff * param_lr[i]
+        i += 1
+    return optimizer
+
