@@ -18,6 +18,7 @@ class OfficeDataset(Dataset):
 
     def __getitem__(self, idx):
         img_path = os.path.join(self.img_dir, self.img_labels.iloc[idx, 0])
+        # print(img_path)
         with open(img_path, 'rb') as f:
             image = Image.open(f)
             image = image.convert('RGB')

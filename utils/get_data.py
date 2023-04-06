@@ -6,8 +6,8 @@ from utils.randaugment import RandAugmentMC
 
 def get_data(args):
     source_annotation_path = './data/annotations/labeled_source_images_webcam.txt'
-    labled_target_annotation_path = './data/annotations/labeled_target_images_amazon_1.txt'
-    unlabled_target_annotation_path = './data/annotations/unlabeled_target_images_amazon_1.txt'
+    labled_target_annotation_path = './data/annotations/labeled_target_images_amazon_3.txt'
+    unlabled_target_annotation_path = './data/annotations/unlabeled_target_images_amazon_3.txt'
     val_target_annotation_path = './data/annotations/validation_target_images_amazon_3.txt'
     data_dir = './data/office'
 
@@ -50,9 +50,9 @@ def get_data(args):
     target_dataset_val = OfficeDataset(val_target_annotation_path, data_dir, transform=data_transforms.get('val'),
                                        strong_transform=data_transforms.get('strong'))
 
-    labeled_dataset = torch.utils.data.ConcatDataset([source_dataset, labled_target_dataset])
+    # labeled_dataset = torch.utils.data.ConcatDataset([source_dataset, labled_target_dataset])
 
     unlabled_target_dataset = OfficeDataset(unlabled_target_annotation_path, data_dir,
                                             transform=data_transforms.get('train'),
                                             strong_transform=data_transforms.get('strong'))
-    return labeled_dataset, unlabled_target_dataset, target_dataset_val
+    return source_dataset, labled_target_dataset, unlabled_target_dataset, target_dataset_val

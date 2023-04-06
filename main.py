@@ -9,6 +9,7 @@ from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 
 from losses import get_losses_unlabeled, BCE_soft_labels, sigmoid_rampup
+# from model.resnet import resnet34
 from utils.get_data import get_data
 from model.basenet import Predictor
 from utils.utils import get_classlist, lr_scheduler
@@ -38,6 +39,7 @@ class_list = get_classlist(source_annotation_path)
 num_class = len(class_list)
 
 feature_extractor = resnet34(pretrained=True)
+# feature_extractor = resnet34()
 feature_extractor.fc = nn.Identity()
 predictor = Predictor(num_class=num_class, input_vector_size=512, norm_factor=args.temperature)
 nn.init.xavier_normal_(predictor.fc.weight)
@@ -73,6 +75,7 @@ target_val_dataloader = DataLoader(target_dataset_val, batch_size=min(args.batch
 
 labeled_len = len(labeled_dataloader)
 unlabeled_len = len(unlabled_target_data_loader)
+val_dataset_len = len(target_dataset_val)
 
 print("hi")
 writer = SummaryWriter()
@@ -101,8 +104,15 @@ def train():
 
     for step in range(args.train_steps):
 
-        optimizer_feature_extractor = lr_scheduler(params_lr_feat_extractor, optimizer_feature_extractor, step, args.learning_rate)
-        optimizer_predictor = lr_scheduler(params_lr_predictor, optimizer_predictor, step, args.learning_rate)
+        optimizer_feature_extractor = lr_scheduler(params_lr_feat_extractor, optimizer_feature_extractor, step, init_lr=args.learning_rate)
+        optimizer_predictor = lr_scheduler(params_lr_predictor, optimizer_predictor, step, init_lr=args.learning_rate)
+
+        lr_g = optimizer_feature_extractor.param_groups[0]['lr']
+        lr_f = optimizer_predictor.param_groups[0]['lr']
+
+        if step % 100 == 0:
+            log_train = 'Train Ep: {} lr_f{:.6f} lr_g{:.6f}\n'.format(step, lr_f, lr_g)
+            print(log_train)
 
         if step % labeled_len:
             labeled_data_iter = iter(labeled_dataloader)
@@ -134,17 +144,18 @@ def train():
         rampup = sigmoid_rampup(step, args.rampup_length)
         w_consistency = args.rampup_coeff * rampup
 
-        adversarial_adaptive_clustering_loss, pseudo_labels_loss, consistency_loss = get_losses_unlabeled(args,
-                                            feature_extractor, predictor, unlabeled_data_images, unlabeled_data_images_t,
-                                            unlabeled_data_images_t2, unlabeled_data_labels, BCE, w_consistency, device)
+        # adversarial_adaptive_clustering_loss, pseudo_labels_loss, consistency_loss = get_losses_unlabeled(args,
+        #                                     feature_extractor, predictor, unlabeled_data_images, unlabeled_data_images_t,
+        #                                     unlabeled_data_images_t2, unlabeled_data_labels, BCE, w_consistency, device)
 
-        loss = adversarial_adaptive_clustering_loss + pseudo_labels_loss + consistency_loss
-        writer.add_scalar("Loss/train/unlabeled", loss, step)
-        loss.backward()
-        optimizer_feature_extractor.step()
-        optimizer_predictor.step()
-        optimizer_feature_extractor.zero_grad()
-        optimizer_predictor.zero_grad()
+        # loss = adversarial_adaptive_clustering_loss + pseudo_labels_loss + consistency_loss
+        loss = -1
+        # writer.add_scalar("Loss/train/unlabeled", loss, step)
+        # loss.backward()
+        # optimizer_feature_extractor.step()
+        # optimizer_predictor.step()
+        # optimizer_feature_extractor.zero_grad()
+        # optimizer_predictor.zero_grad()
 
         if step % 10 == 0:
             print("step: " + str(step) + ". ce loss: " + str(cross_entropy_loss) + ". unlabeled loss: " + str(loss))
@@ -175,7 +186,7 @@ def test(dataloader):
             for t, p in zip(gt_labels_t.view(-1), predictions1.view(-1)):
                 confusion_matrix[t.long(), p.long()] += 1
             num_correct += predictions1.eq(gt_labels_t.data).cpu().sum()
-            test_loss += criterion(predictions1.float(), gt_labels_t.float()) / len(dataloader)
+            test_loss += criterion(predictions, gt_labels_t) / val_dataset_len
     print('\nTest set: Average loss: {:.4f}, Accuracy: {}/{} F1 ({:.0f}%)\n'.format(test_loss, num_correct, size,
                                                                                     100. * num_correct / size))
     feature_extractor.train()
