@@ -24,15 +24,14 @@ parser.add_argument('--rampup_coeff', type=float, default=30.0)
 parser.add_argument('--rampup_length', type=int, default=20000)
 parser.add_argument('--threshold', default=0.95, type=float)
 parser.add_argument('--lr_multiplier', default=0.1, type=float)
-logs_file = '' # ??
-checkpath = '' # ??
-
+logs_file = ''  # ??
+checkpath = ''  # ??
 
 args = parser.parse_args()
 
 torch.manual_seed(1)
 device = torch.device("mps")
-resnet_output_vector_size = 1000 # ??
+resnet_output_vector_size = 1000  # ??
 
 source_annotation_path = 'data/annotations/labeled_source_images_webcam.txt'
 class_list = get_classlist(source_annotation_path)
@@ -63,17 +62,21 @@ opt['logs_file'] = logs_file
 opt['checkpath'] = checkpath
 opt['class_list'] = class_list
 
-labeled_datasets, unlabled_target_dataset, target_dataset_val = get_data(args)
+source_dataset, labled_target_dataset, unlabled_target_dataset, target_dataset_val = get_data(args)
 
-labeled_dataloader = DataLoader(labeled_datasets, batch_size=args.batch_size, num_workers=0, shuffle=True,
-                                drop_last=True)
+source_dataloader = DataLoader(source_dataset, batch_size=args.batch_size, num_workers=0, shuffle=True,
+                               drop_last=True)
+labled_target_dataloader = DataLoader(labled_target_dataset, batch_size=args.batch_size, num_workers=0, shuffle=True,
+                                      drop_last=True)
+
 unlabled_target_data_loader = DataLoader(unlabled_target_dataset, batch_size=args.batch_size, num_workers=0,
                                          shuffle=True, drop_last=True)
 
 target_val_dataloader = DataLoader(target_dataset_val, batch_size=min(args.batch_size, len(target_dataset_val)),
                                    num_workers=0, shuffle=True, drop_last=True)
 
-labeled_len = len(labeled_dataloader)
+source_len = len(source_dataloader)
+labeled_target_len = len(labled_target_dataloader)
 unlabeled_len = len(unlabled_target_data_loader)
 val_dataset_len = len(target_dataset_val)
 
@@ -82,7 +85,8 @@ writer = SummaryWriter()
 
 
 def train():
-    labeled_data_iter = iter(labeled_dataloader)
+    source_data_iter = iter(source_dataloader)
+    labeled_target_data_iter = iter(labled_target_dataloader)
     unlabled_data_iter = iter(unlabled_target_data_loader)
 
     feature_extractor.train()
@@ -104,7 +108,8 @@ def train():
 
     for step in range(args.train_steps):
 
-        optimizer_feature_extractor = lr_scheduler(params_lr_feat_extractor, optimizer_feature_extractor, step, init_lr=args.learning_rate)
+        optimizer_feature_extractor = lr_scheduler(params_lr_feat_extractor, optimizer_feature_extractor, step,
+                                                   init_lr=args.learning_rate)
         optimizer_predictor = lr_scheduler(params_lr_predictor, optimizer_predictor, step, init_lr=args.learning_rate)
 
         lr_g = optimizer_feature_extractor.param_groups[0]['lr']
@@ -114,18 +119,28 @@ def train():
             log_train = 'Train Ep: {} lr_f{:.6f} lr_g{:.6f}\n'.format(step, lr_f, lr_g)
             print(log_train)
 
-        if step % labeled_len:
-            labeled_data_iter = iter(labeled_dataloader)
+        if step % source_len:
+            source_data_iter = iter(source_dataloader)
+        if step % labeled_target_len:
+            labeled_target_data_iter = iter(labled_target_dataloader)
         if step % unlabeled_len:
             unlabled_data_iter = iter(unlabled_target_data_loader)
 
-        labeled_data_iter_next = next(labeled_data_iter)
-        labeled_data_images = labeled_data_iter_next[0].to(device)
-        labeled_data_labels = labeled_data_iter_next[1].to(device)
-        features = feature_extractor(labeled_data_images)
+        source_data_iter_next = next(source_data_iter)
+        source_data_images = source_data_iter_next[0].to(device)
+        source_data_labels = source_data_iter_next[1].to(device)
+
+        labeled_target_data_iter_next = next(labeled_target_data_iter)
+        labeled_target_data_images = labeled_target_data_iter_next[0].to(device)
+        labeled_target_data_labels = labeled_target_data_iter_next[1].to(device)
+
+        labeled_images = torch.cat((source_data_images, labeled_target_data_images), 0)
+        labeled_target = torch.cat((source_data_labels, labeled_target_data_labels), 0)
+
+        features = feature_extractor(labeled_images)
         predictions = predictor(features)
 
-        cross_entropy_loss = criterion(predictions, labeled_data_labels)
+        cross_entropy_loss = criterion(predictions, labeled_target)
         writer.add_scalar("Loss/train/cross entropy", cross_entropy_loss, step)
 
         cross_entropy_loss.backward(retain_graph=True)
@@ -192,6 +207,7 @@ def test(dataloader):
     feature_extractor.train()
     predictor.train()
     return test_loss.data, 100 * float(num_correct) / size
+
 
 train()
 writer.flush()
