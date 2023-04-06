@@ -159,18 +159,18 @@ def train():
         rampup = sigmoid_rampup(step, args.rampup_length)
         w_consistency = args.rampup_coeff * rampup
 
-        # adversarial_adaptive_clustering_loss, pseudo_labels_loss, consistency_loss = get_losses_unlabeled(args,
-        #                                     feature_extractor, predictor, unlabeled_data_images, unlabeled_data_images_t,
-        #                                     unlabeled_data_images_t2, unlabeled_data_labels, BCE, w_consistency, device)
+        adversarial_adaptive_clustering_loss, pseudo_labels_loss, consistency_loss = get_losses_unlabeled(args,
+                                            feature_extractor, predictor, unlabeled_data_images, unlabeled_data_images_t,
+                                            unlabeled_data_images_t2, unlabeled_data_labels, BCE, w_consistency, device)
 
-        # loss = adversarial_adaptive_clustering_loss + pseudo_labels_loss + consistency_loss
-        loss = -1
-        # writer.add_scalar("Loss/train/unlabeled", loss, step)
-        # loss.backward()
-        # optimizer_feature_extractor.step()
-        # optimizer_predictor.step()
-        # optimizer_feature_extractor.zero_grad()
-        # optimizer_predictor.zero_grad()
+        loss = adversarial_adaptive_clustering_loss + pseudo_labels_loss + consistency_loss
+        # loss = -1
+        writer.add_scalar("Loss/train/unlabeled", loss, step)
+        loss.backward()
+        optimizer_feature_extractor.step()
+        optimizer_predictor.step()
+        optimizer_feature_extractor.zero_grad()
+        optimizer_predictor.zero_grad()
 
         if step % 10 == 0:
             print("step: " + str(step) + ". ce loss: " + str(cross_entropy_loss) + ". unlabeled loss: " + str(loss))
