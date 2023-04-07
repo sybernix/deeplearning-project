@@ -53,12 +53,13 @@ def adversarial_adaptive_clustering_loss_unlabeled(args, features, target, proba
 def pairwise_target(args, features, target, device):
     """ Generates similarity label pairwise """
     detached_features = features.detach()
+    topK = 5
     # when data is unlabeled
     if target is None:
         rank_features = detached_features
         rank_index = torch.argsort(rank_features, dim=1, descending=True)
         rank_index1, rank_index2 = pairwise_enumerate_2d(rank_index)
-        rank_index1, rank_index2 = rank_index1[:, :args.topK], rank_index2[:, :args.topK]
+        rank_index1, rank_index2 = rank_index1[:, :topK], rank_index2[:, :topK]
         rank_index1, _ = torch.sort(rank_index1, dim=1)
         rank_index2, _ = torch.sort(rank_index2, dim=1)
         rank_difference = rank_index1 - rank_index2

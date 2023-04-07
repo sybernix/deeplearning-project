@@ -9,7 +9,6 @@ from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 
 from losses import get_losses_unlabeled, BCE_soft_labels, sigmoid_rampup
-# from model.resnet import resnet34
 from utils.get_data import get_data
 from model.basenet import Predictor
 from utils.utils import get_classlist, lr_scheduler
@@ -38,7 +37,6 @@ class_list = get_classlist(source_annotation_path)
 num_class = len(class_list)
 
 feature_extractor = resnet34(pretrained=True)
-# feature_extractor = resnet34()
 feature_extractor.fc = nn.Identity()
 predictor = Predictor(num_class=num_class, input_vector_size=512, norm_factor=args.temperature)
 nn.init.xavier_normal_(predictor.fc.weight)
@@ -161,10 +159,10 @@ def train():
 
         adversarial_adaptive_clustering_loss, pseudo_labels_loss, consistency_loss = get_losses_unlabeled(args,
                                             feature_extractor, predictor, unlabeled_data_images, unlabeled_data_images_t,
-                                            unlabeled_data_images_t2, unlabeled_data_labels, BCE, w_consistency, device)
+                                            unlabeled_data_images_t2, None, BCE, w_consistency, device)
+
 
         loss = adversarial_adaptive_clustering_loss + pseudo_labels_loss + consistency_loss
-        # loss = -1
         writer.add_scalar("Loss/train/unlabeled", loss, step)
         loss.backward()
         optimizer_feature_extractor.step()
