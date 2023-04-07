@@ -1,5 +1,8 @@
+import os
+
 import matplotlib.pyplot as plt
 import matplotlib
+import datetime
 matplotlib.use('macosx')
 
 
@@ -36,4 +39,21 @@ def lr_scheduler(param_lr, optimizer, iter, gamma=0.0001, power=0.75, init_lr=0.
         param_group["lr"] = coeff * param_lr[i]
         i += 1
     return optimizer
+
+
+def prepare_folder():
+    now = datetime.datetime.now().strftime('%m%d%H%M%S')
+    path = 'save/%s' % now
+
+    log_file = os.path.join(path, 'logs')
+
+    checkpoint_path = os.path.join(path, 'checkpoint')
+
+    if not os.path.exists(path):
+        os.makedirs(path)
+
+    if not os.path.exists(checkpoint_path):
+        os.makedirs(checkpoint_path)
+
+    return path, log_file, checkpoint_path
 

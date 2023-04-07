@@ -6,6 +6,7 @@ __pycache__/
 .idea/
 #data/office/
 temp/
+save/
 
 # C extensions
 *.so

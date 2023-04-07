@@ -1,4 +1,6 @@
 import argparse
+import os.path
+import time
 
 import numpy as np
 import torch
@@ -11,7 +13,7 @@ from torch.utils.tensorboard import SummaryWriter
 from losses import get_losses_unlabeled, BCE_soft_labels, sigmoid_rampup
 from utils.get_data import get_data
 from model.basenet import Predictor
-from utils.utils import get_classlist, lr_scheduler
+from utils.utils import get_classlist, lr_scheduler, prepare_folder
 
 # arguments
 parser = argparse.ArgumentParser()
@@ -23,8 +25,6 @@ parser.add_argument('--rampup_coeff', type=float, default=30.0)
 parser.add_argument('--rampup_length', type=int, default=20000)
 parser.add_argument('--threshold', default=0.95, type=float)
 parser.add_argument('--lr_multiplier', default=0.1, type=float)
-logs_file = ''  # ??
-checkpath = ''  # ??
 
 args = parser.parse_args()
 
@@ -55,9 +55,11 @@ predictor = nn.DataParallel(predictor)
 feature_extractor = feature_extractor.to(device)
 predictor = predictor.to(device)
 
+_, log_file, checkpoint_path = prepare_folder()
+
 opt = {}
-opt['logs_file'] = logs_file
-opt['checkpath'] = checkpath
+opt['log_file'] = log_file
+opt['checkpoint_path'] = checkpoint_path
 opt['class_list'] = class_list
 
 source_dataset, labled_target_dataset, unlabled_target_dataset, target_dataset_val = get_data(args)
@@ -103,6 +105,8 @@ def train():
 
     BCE = BCE_soft_labels().to(device)
     criterion = nn.CrossEntropyLoss().to(device)
+    best_accuracy = 0
+    start_time = time.time()
 
     for step in range(args.train_steps):
 
@@ -175,6 +179,18 @@ def train():
 
         if step % 100 == 0:
             val_loss, val_accuracy = test(target_val_dataloader)
+            if val_accuracy > best_accuracy:
+                best_accuracy = val_accuracy
+            current_time = time.time() - start_time
+
+            with open(opt["log_file"], 'a') as f:
+                f.write('step %d current validation accuracy %f best validation accuracy %f time taken %f sec. \n\n'
+                        % (step, val_accuracy, best_accuracy, current_time))
+
+            torch.save(feature_extractor.state_dict(), os.path.join(opt["checkpoint_path"],
+                                                                    "feature_extractor_steo_{}.pth.tar".format(step)))
+            torch.save(predictor.state_dict(), os.path.join(opt["checkpoint_path"],
+                                                            "predictor_steo_{}.pth.tar".format(step)))
 
 
 def test(dataloader):
