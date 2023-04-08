@@ -55,4 +55,5 @@ def get_data(args):
     unlabled_target_dataset = OfficeDataset(unlabled_target_annotation_path, data_dir,
                                             transform=data_transforms.get('train'),
                                             strong_transform=data_transforms.get('strong'))
-    return source_dataset, labled_target_dataset, unlabled_target_dataset, target_dataset_val
+    test_dataset = OfficeDataset(unlabled_target_annotation_path, data_dir, transform=data_transforms.get('test'))
+    return source_dataset, labled_target_dataset, unlabled_target_dataset, target_dataset_val, test_dataset

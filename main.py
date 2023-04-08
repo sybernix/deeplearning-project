@@ -62,7 +62,7 @@ opt['log_file'] = log_file
 opt['checkpoint_path'] = checkpoint_path
 opt['class_list'] = class_list
 
-source_dataset, labled_target_dataset, unlabled_target_dataset, target_dataset_val = get_data(args)
+source_dataset, labled_target_dataset, unlabled_target_dataset, target_dataset_val, test_dataset = get_data(args)
 
 source_dataloader = DataLoader(source_dataset, batch_size=args.batch_size, num_workers=0, shuffle=True,
                                drop_last=True)
@@ -74,6 +74,8 @@ unlabled_target_data_loader = DataLoader(unlabled_target_dataset, batch_size=arg
 
 target_val_dataloader = DataLoader(target_dataset_val, batch_size=min(args.batch_size, len(target_dataset_val)),
                                    num_workers=0, shuffle=True, drop_last=True)
+
+test_dataloader = DataLoader(test_dataset, batch_size=args.batch_size, num_workers=0, shuffle=True, drop_last=True)
 
 source_len = len(source_dataloader)
 labeled_target_len = len(labled_target_dataloader)
@@ -106,6 +108,7 @@ def train():
     BCE = BCE_soft_labels().to(device)
     criterion = nn.CrossEntropyLoss().to(device)
     best_accuracy = 0
+    best_accuracy_test = 0
     start_time = time.time()
 
     for step in range(args.train_steps):
@@ -162,9 +165,14 @@ def train():
         w_consistency = args.rampup_coeff * rampup
 
         adversarial_adaptive_clustering_loss, pseudo_labels_loss, consistency_loss = get_losses_unlabeled(args,
-                                            feature_extractor, predictor, unlabeled_data_images, unlabeled_data_images_t,
-                                            unlabeled_data_images_t2, None, BCE, w_consistency, device)
-
+                                                                                                          feature_extractor,
+                                                                                                          predictor,
+                                                                                                          unlabeled_data_images,
+                                                                                                          unlabeled_data_images_t,
+                                                                                                          unlabeled_data_images_t2,
+                                                                                                          None, BCE,
+                                                                                                          w_consistency,
+                                                                                                          device)
 
         loss = adversarial_adaptive_clustering_loss + pseudo_labels_loss + consistency_loss
         writer.add_scalar("Loss/train/unlabeled", loss, step)
@@ -179,13 +187,17 @@ def train():
 
         if step % 100 == 0:
             val_loss, val_accuracy = test(target_val_dataloader)
+            test_loss, test_accuracy = test(test_dataloader)
             if val_accuracy > best_accuracy:
                 best_accuracy = val_accuracy
+                best_accuracy_test = test_accuracy
             current_time = time.time() - start_time
 
             with open(opt["log_file"], 'a') as f:
-                f.write('step %d current validation accuracy %f best validation accuracy %f time taken %f sec. \n\n'
-                        % (step, val_accuracy, best_accuracy, current_time))
+                f.write(('step %d current validation accuracy %f best validation accuracy %f test accuracy %f best ' +
+                         'test accuracy %f time taken %f sec. \n\n') % (
+                        step, val_accuracy, best_accuracy, test_accuracy,
+                        best_accuracy_test, current_time))
 
             torch.save(feature_extractor.state_dict(), os.path.join(opt["checkpoint_path"],
                                                                     "feature_extractor_steo_{}.pth.tar".format(step)))
